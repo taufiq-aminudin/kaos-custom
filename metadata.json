@@ -1,0 +1,8 @@
+{
+  "name": "Kaos Custom",
+  "description": "Katalog kaos custom, kaos kata-kata, dan graphic tee unik dengan panel admin manajemen produk.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
