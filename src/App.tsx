@@ -86,6 +86,62 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  // Share button state
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string>('');
+
+  const handleShareProduct = async (p: Product) => {
+    const rawUrl = p.buy_url?.trim() || '';
+    const shareUrl = rawUrl.startsWith('http://') || rawUrl.startsWith('https://')
+      ? rawUrl
+      : window.location.origin + (rawUrl.startsWith('/') ? rawUrl : '/' + rawUrl);
+
+    const shareData = {
+      title: `${p.name} — Kaos Custom`,
+      text: `${p.name}${p.price ? ' (' + p.price + ')' : ''} — Lihat produk kaos custom di sini:`,
+      url: shareUrl,
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err: any) {
+        if (err && err.name === 'AbortError') {
+          // User dismissed native share sheet
+          return;
+        }
+      }
+    }
+
+    // Fallback: Copy product link to clipboard
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = shareUrl;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedId(p.id);
+      setToastMessage(`Link "${p.name}" disalin ke clipboard!`);
+      setTimeout(() => {
+        setCopiedId(null);
+      }, 2500);
+      setTimeout(() => {
+        setToastMessage('');
+      }, 3000);
+    } catch {
+      setToastMessage('Gagal menyalin link ke clipboard.');
+      setTimeout(() => setToastMessage(''), 2500);
+    }
+  };
+
   // Sync hash routing
   useEffect(() => {
     const handleHashChange = () => {
@@ -717,9 +773,33 @@ export default function App() {
                 <h3>{p.name}</h3>
                 {p.price && <b>{p.price}</b>}
                 {p.description && <p>{p.description}</p>}
-                <a className="buy" href={p.buy_url} target="_blank" rel="noopener noreferrer">
-                  Lihat & Beli <b>↗</b>
-                </a>
+                <div className="card-actions">
+                  <a className="buy" href={p.buy_url} target="_blank" rel="noopener noreferrer">
+                    Lihat & Beli <b>↗</b>
+                  </a>
+                  <button
+                    type="button"
+                    className={`share-btn ${copiedId === p.id ? 'copied' : ''}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleShareProduct(p);
+                    }}
+                    title="Bagikan produk"
+                    aria-label={`Bagikan ${p.name}`}
+                  >
+                    {copiedId === p.id ? (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span>Tersalin</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                        <span>Share</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </article>
           ))}
@@ -765,6 +845,12 @@ export default function App() {
           Admin
         </a>
       </footer>
+
+      {toastMessage && (
+        <div className="toast-notice" role="status" aria-live="polite">
+          <span><b>✓</b> {toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }
