@@ -1,6 +1,57 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product } from './types';
 
+const INITIAL_PRODUCTS: Product[] = [
+  {
+    id: "prod-1",
+    name: "Kaos Kata: Kerja Keras Bagai Kuda",
+    buy_url: "https://shopee.co.id",
+    category: "Kaos Kata-Kata",
+    price: "Rp 89.000",
+    description: "Bahan katun combed 30s premium, adem dan menyerap keringat. Sablon DTF presisi tidak mudah retak.",
+    badge: "Terlaris",
+    image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=600&q=80",
+    alt: "Kaos Kata Kerja Keras Bagai Kuda",
+    created_at: 1712000000
+  },
+  {
+    id: "prod-2",
+    name: "Kaos Minimalis: Santai Tapi Pasti",
+    buy_url: "https://tokopedia.com",
+    category: "Kaos Kata-Kata",
+    price: "Rp 95.000",
+    description: "Desain tipografi minimalis modern dengan aksen warna lime. Cocok untuk hangout kasual dan daily wear.",
+    badge: "Pilihan Editor",
+    image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=600&q=80",
+    alt: "Kaos Santai Tapi Pasti",
+    created_at: 1711900000
+  },
+  {
+    id: "prod-3",
+    name: "Graphic Tee: Urban Street Character",
+    buy_url: "https://shopee.co.id",
+    category: "Graphic Tee",
+    price: "Rp 115.000",
+    description: "Ilustrasi streetwear eksklusif dengan warna tajam. Menggunakan bahan heavy cotton 24s berpotongan oversized.",
+    badge: "Terbaru",
+    image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=600&q=80",
+    alt: "Graphic Tee Urban Street",
+    created_at: 1711800000
+  },
+  {
+    id: "prod-4",
+    name: "Kaos Humor: Butuh Liburan Bukan Solusi",
+    buy_url: "https://tokopedia.com",
+    category: "Kaos Humor",
+    price: "Rp 89.000",
+    description: "Kata-kata satir lucu seputar dunia kerja dan rutinitas. Pilihan pas untuk hadiah kawan sekantor.",
+    badge: "Viral",
+    image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=600&q=80",
+    alt: "Kaos Humor Butuh Liburan",
+    created_at: 1711700000
+  }
+];
+
 export default function App() {
   const [currentView, setCurrentView] = useState<'catalog' | 'admin'>(() => {
     return window.location.hash === '#admin' || window.location.pathname === '/admin'
@@ -8,13 +59,15 @@ export default function App() {
       : 'catalog';
   });
 
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeCategory, setActiveCategory] = useState<string>('');
 
   // Admin state
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('kaoscustom_auth') === 'true';
+  });
   const [adminUsername, setAdminUsername] = useState<string>('admin');
   const [adminPassword, setAdminPassword] = useState<string>('');
   const [loginError, setLoginError] = useState<string>('');
@@ -46,32 +99,53 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Fetch products
+  // Fetch products with localStorage fallback for static Cloudflare deployments
   const fetchProducts = async () => {
     try {
       setLoading(true);
       const res = await fetch('/api/products');
       if (res.ok) {
         const data = await res.json();
-        setProducts(data);
+        if (Array.isArray(data) && data.length > 0) {
+          setProducts(data);
+          localStorage.setItem('kaoscustom_products', JSON.stringify(data));
+          return;
+        }
       }
-    } catch (err) {
-      console.error('Error fetching products:', err);
+    } catch {
+      // API not reachable (e.g. static Cloudflare Pages/Worker deployment)
+    }
+
+    // Fallback to local storage or initial products
+    try {
+      const cached = localStorage.getItem('kaoscustom_products');
+      if (cached) {
+        setProducts(JSON.parse(cached));
+      } else {
+        setProducts(INITIAL_PRODUCTS);
+        localStorage.setItem('kaoscustom_products', JSON.stringify(INITIAL_PRODUCTS));
+      }
+    } catch {
+      setProducts(INITIAL_PRODUCTS);
     } finally {
       setLoading(false);
     }
   };
 
-  // Check admin session
+  // Check admin session with fallback
   const checkAdminAuth = async () => {
     try {
       const res = await fetch('/api/auth/me');
       if (res.ok) {
         const data = await res.json();
-        setIsAdminAuthenticated(data.authenticated);
+        if (data.authenticated) {
+          setIsAdminAuthenticated(true);
+          localStorage.setItem('kaoscustom_auth', 'true');
+          return;
+        }
       }
-    } catch (err) {
-      console.error('Auth check error:', err);
+    } catch {
+      // offline / static fallback
     }
   };
 
@@ -107,16 +181,28 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: adminUsername, password: adminPassword }),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setIsAdminAuthenticated(true);
-        setAdminPassword('');
-        setNotice('Berhasil masuk ke area admin.');
-      } else {
-        setLoginError(data.error || 'Username atau password salah.');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setIsAdminAuthenticated(true);
+          localStorage.setItem('kaoscustom_auth', 'true');
+          setAdminPassword('');
+          setNotice('Berhasil masuk ke area admin.');
+          return;
+        }
       }
     } catch {
-      setLoginError('Terjadi kesalahan jaringan.');
+      // fallback for static hosting
+    }
+
+    // Static mode auth verification
+    if (adminUsername === 'admin' && adminPassword === 'GantiPasswordKuat-2026!') {
+      setIsAdminAuthenticated(true);
+      localStorage.setItem('kaoscustom_auth', 'true');
+      setAdminPassword('');
+      setNotice('Berhasil masuk ke area admin.');
+    } else {
+      setLoginError('Username atau password salah.');
     }
   };
 
@@ -128,6 +214,7 @@ export default function App() {
       // ignore
     }
     setIsAdminAuthenticated(false);
+    localStorage.removeItem('kaoscustom_auth');
     setNotice('');
     window.location.hash = '';
     setCurrentView('catalog');
@@ -170,25 +257,35 @@ export default function App() {
     try {
       let finalImageUrl = formImageUrl.trim();
 
-      // If user uploaded a new image file, upload it first
+      // If user uploaded a new image file, try uploading to server or convert to data URL
       if (selectedFile) {
-        const formData = new FormData();
-        formData.append('image_file', selectedFile);
+        try {
+          const formData = new FormData();
+          formData.append('image_file', selectedFile);
 
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
+          const uploadRes = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
 
-        if (!uploadRes.ok) {
-          const errData = await uploadRes.json();
-          setNotice(errData.error || 'Gagal mengunggah file gambar.');
-          setIsSubmitting(false);
-          return;
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            finalImageUrl = uploadData.url;
+          } else {
+            // Read as data URL for client persistence
+            finalImageUrl = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(selectedFile);
+            });
+          }
+        } catch {
+          finalImageUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(selectedFile);
+          });
         }
-
-        const uploadData = await uploadRes.json();
-        finalImageUrl = uploadData.url;
       }
 
       if (!finalImageUrl) {
@@ -197,36 +294,55 @@ export default function App() {
         return;
       }
 
-      const payload = {
-        name: formName,
-        buy_url: formBuyUrl,
-        category: formCategory,
-        price: formPrice,
-        description: formDescription,
-        badge: formBadge,
+      const payload: Product = {
+        id: editId || 'prod-' + Date.now().toString(36),
+        name: formName.trim(),
+        buy_url: formBuyUrl.trim(),
+        category: formCategory.trim() || 'Kaos Custom',
+        price: formPrice.trim(),
+        description: formDescription.trim(),
+        badge: formBadge.trim(),
         image: finalImageUrl,
-        alt: formAlt || formName,
+        alt: (formAlt || formName).trim(),
+        created_at: Math.floor(Date.now() / 1000),
       };
 
-      const url = editId ? `/api/products/${editId}` : '/api/products';
-      const method = editId ? 'PUT' : 'POST';
+      // Try server API
+      let serverSaved = false;
+      try {
+        const url = editId ? `/api/products/${editId}` : '/api/products';
+        const method = editId ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setNotice(editId ? 'Produk berhasil diperbarui.' : 'Produk berhasil ditambahkan ke katalog.');
-        cancelEdit();
-        await fetchProducts();
-      } else {
-        setNotice(data.error || 'Gagal menyimpan produk.');
+        if (res.ok) {
+          serverSaved = true;
+          await fetchProducts();
+        }
+      } catch {
+        // server offline
       }
+
+      // If server didn't handle it, update state & localStorage
+      if (!serverSaved) {
+        let updated: Product[];
+        if (editId) {
+          updated = products.map((p) => (p.id === editId ? payload : p));
+        } else {
+          updated = [payload, ...products];
+        }
+        setProducts(updated);
+        localStorage.setItem('kaoscustom_products', JSON.stringify(updated));
+      }
+
+      setNotice(editId ? 'Produk berhasil diperbarui.' : 'Produk berhasil ditambahkan ke katalog.');
+      cancelEdit();
     } catch {
-      setNotice('Terjadi kesalahan jaringan.');
+      setNotice('Terjadi kesalahan saat menyimpan produk.');
     } finally {
       setIsSubmitting(false);
     }
@@ -239,17 +355,19 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setNotice('Produk berhasil dihapus.');
-        if (editId === id) cancelEdit();
-        await fetchProducts();
-      } else {
-        const data = await res.json();
-        setNotice(data.error || 'Gagal menghapus produk.');
+      try {
+        await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      } catch {
+        // ignore if offline
       }
+
+      const updated = products.filter((p) => p.id !== id);
+      setProducts(updated);
+      localStorage.setItem('kaoscustom_products', JSON.stringify(updated));
+      setNotice('Produk berhasil dihapus.');
+      if (editId === id) cancelEdit();
     } catch {
-      setNotice('Terjadi kesalahan jaringan.');
+      setNotice('Terjadi kesalahan saat menghapus produk.');
     }
   };
 
