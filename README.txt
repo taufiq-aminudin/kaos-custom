@@ -8,3 +8,8 @@ KAOS-CUSTOM.MY.ID — KATALOG + ADMIN
 7. Tombol produk mengarah ke link pembelian; website ini tidak memproses pembayaran sendiri.
 8. Data disimpan di data/products.json pada server. Backup folder data/ dan uploads/ berkala. Jangan gunakan permission 777 kecuali disarankan hosting.
 9. Logo dan favicon SVG disertakan. Produk awal kosong, tambahkan lewat admin.
+
+CATATAN PENTING — KOMPATIBILITAS HOSTING
+Proyek ini menggunakan PHP (index.php, admin.php, config.php). File PHP tidak dapat dijalankan langsung oleh Cloudflare Pages/Workers melalui perintah `npx wrangler deploy`.
+Gunakan paket ini pada hosting yang mendukung PHP 8.1+ (misalnya cPanel), dengan mengunggah seluruh isi ZIP ke document root.
+Jika target wajib Cloudflare Workers/Pages, aplikasi perlu dikonversi menjadi frontend statis + API Worker dan penyimpanan persisten (misalnya KV/D1); mengganti deploy command saja tidak cukup.
